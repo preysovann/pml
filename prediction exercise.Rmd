@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Overview
-This report will compare four classisfication models such as decision tree, random forest, and generalized boosted model on a datasets. The datasets come from devices such as  Jawbone Up, Nike FuelBand, and Fitbit. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. The datasets are obtained from  from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+This report will compare three classification models such as decision tree, random forest, and generalized boosted model on a datasets. The datasets come from devices such as  Jawbone Up, Nike FuelBand, and Fitbit. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. The datasets are obtained from  from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
 
 Reference: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
 
@@ -30,7 +30,7 @@ library(e1071)
 library(randomForest)
 library(gbm)
 
-set.seed(12345)
+set.seed(1980)
 
 # Load training datasets
 trainDs <- read.csv("./Data/pml-training.csv")
@@ -46,7 +46,7 @@ dim(trainDs)
 dim(validateDs)
 ```
 
-There are 19622 observations and 160 variables in the training datasets; while 20 observations and 160 variables in the validating datasets.
+There are `r dim(trainDs)[1]` observations and `r dim(trainDs)[2]` variables in the training datasets; while `r dim(validateDs)[1]` observations and `r dim(validateDs)[2]` variables in the validating datasets.
 
 Removing variables containing N/A and reducing irrelevant variables from training datasets.
 ```{r}
@@ -75,13 +75,15 @@ dim(testDs)
 ```
 
 # Model Building and Comparision
-Finding the highly correlated predictors/variables.
+Checking the highly correlated predictors/variables.
 ```{r}
 cor_matrix <- cor(trainDs_new[, -53])
 corrplot(cor_matrix, order = "FPC", method = "color", type = "upper", 
          tl.cex = 0.8, tl.col = rgb(0, 0, 0))
 ```
+
 The highly correlated preditors/variables are those with a dark color intersection. The name of the predictors/variables are followed (having the cutoff of 0.75).
+
 ```{r}
 highlyCorrelated = findCorrelation(cor_matrix, cutoff=0.75)
 names(trainDs_new)[highlyCorrelated]
@@ -97,6 +99,7 @@ fancyRpartPlot(decisionTreeModel)
 ```
 
 Checking the accuracy of the decision tree model using the testing datasets.
+
 ```{r}
 predictDecisionTreeModel <- predict(decisionTreeModel, testDs, type = "class")
 cm_decisionTreeModel <- confusionMatrix(predictDecisionTreeModel, factor(testDs$classe))
@@ -108,6 +111,7 @@ cm_decisionTreeModel
 controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
 randomForestModel <- train(classe ~ ., data=trainDs_new, method="rf", trControl=controlRF)
 randomForestModel$finalModel
+plot(randomForestModel)
 ```
 
 Checking the accuracy of the random forest model using the testing datasets.
@@ -125,6 +129,8 @@ generalizedBoostedModel$finalModel
 
 # print model summary
 print(generalizedBoostedModel)
+
+plot(generalizedBoostedModel)
 ```
 
 Checking the accuracy of the generalized boosted model using the testing datasets.
@@ -144,11 +150,6 @@ AccuracyResults <- data.frame(
 print(AccuracyResults)
 ```
 The table shows that the Random Forest Model is the best model having the accuracy of `r cm_randomForestModel$overall['Accuracy']` and out-of-sample rate of `r 1 - cm_randomForestModel$overall['Accuracy']`.
-
-```{r}
-plot(randomForestModel)
-plot(generalizedBoostedModel)
-```
 
 # Apply Best Model
 Having the highest accuracy, random forest model is applied to the validation datasets.
