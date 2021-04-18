@@ -1,0 +1,159 @@
+---
+title: "Prediction Exercise"
+author: "Sovann Prey"
+date: "4/17/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview
+This report will compare four classisfication models such as decision tree, random forest, and generalized boosted model on a datasets. The datasets come from devices such as  Jawbone Up, Nike FuelBand, and Fitbit. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. The datasets are obtained from  from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+Reference: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+# Data Loading and Processing
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(kernlab)
+library(rattle)
+library(corrplot)
+library(rpart)
+library(rpart.plot)
+library(e1071)
+library(randomForest)
+library(gbm)
+
+set.seed(12345)
+
+# Load training datasets
+trainDs <- read.csv("./Data/pml-training.csv")
+
+# Load testing datasets as validating datasets
+validateDs <- read.csv("./Data/pml-testing.csv")
+
+
+# Checking training datasets
+dim(trainDs)
+
+# Checking validating datasets
+dim(validateDs)
+```
+
+There are 19622 observations and 160 variables in the training datasets; while 20 observations and 160 variables in the validating datasets.
+
+Removing variables containing N/A and reducing irrelevant variables from training datasets.
+```{r}
+# Removing N/A
+trainDs <- trainDs[, colSums(is.na(trainDs)) == 0]
+validateDs <- validateDs[, colSums(is.na(validateDs)) == 0]
+# Removing irrelevant columns/variables
+trainDs <- trainDs[, -c(1:7)]
+validateDs <- validateDs[, -c(1:7)]
+```
+
+Removing near-zero-variance variables.
+```{r}
+nvz <- nearZeroVar(trainDs)
+trainDs <- trainDs[, -nvz]
+dim(trainDs)
+```
+
+Splitting the training datasets into validation and training datasets.
+```{r}
+train <- createDataPartition(y=trainDs$classe, p=0.7, list=FALSE)
+trainDs_new <- trainDs[train,]
+testDs <- trainDs[-train,]
+dim(trainDs_new)
+dim(testDs)
+```
+
+# Model Building and Comparision
+Finding the highly correlated predictors/variables.
+```{r}
+cor_matrix <- cor(trainDs_new[, -53])
+corrplot(cor_matrix, order = "FPC", method = "color", type = "upper", 
+         tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+```
+The highly correlated preditors/variables are those with a dark color intersection. The name of the predictors/variables are followed (having the cutoff of 0.75).
+```{r}
+highlyCorrelated = findCorrelation(cor_matrix, cutoff=0.75)
+names(trainDs_new)[highlyCorrelated]
+```
+
+Three models are used for prediction include decision trees, random forest, and generalized boosted model.
+
+## Decision Trees
+```{r}
+decisionTreeModel <- rpart(classe ~ ., data=trainDs_new, method="class")
+fancyRpartPlot(decisionTreeModel)
+
+```
+
+Checking the accuracy of the decision tree model using the testing datasets.
+```{r}
+predictDecisionTreeModel <- predict(decisionTreeModel, testDs, type = "class")
+cm_decisionTreeModel <- confusionMatrix(predictDecisionTreeModel, factor(testDs$classe))
+cm_decisionTreeModel
+```
+
+## Random Forests
+```{r}
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+randomForestModel <- train(classe ~ ., data=trainDs_new, method="rf", trControl=controlRF)
+randomForestModel$finalModel
+```
+
+Checking the accuracy of the random forest model using the testing datasets.
+```{r}
+predictRandomForestModel <- predict(randomForestModel, newdata=testDs)
+cm_randomForestModel <- confusionMatrix(predictRandomForestModel, factor(testDs$classe))
+cm_randomForestModel
+```
+
+## Generalized Boosted Model
+```{r}
+controlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+generalizedBoostedModel  <- train(classe ~ ., data=trainDs_new, method = "gbm", trControl = controlGBM, verbose = FALSE)
+generalizedBoostedModel$finalModel
+
+# print model summary
+print(generalizedBoostedModel)
+```
+
+Checking the accuracy of the generalized boosted model using the testing datasets.
+```{r}
+predictGeneralizedBoostedModel <- predict(generalizedBoostedModel, newdata=testDs)
+cm_generalizedBoostedModel <- confusionMatrix(predictGeneralizedBoostedModel, factor(testDs$classe))
+cm_generalizedBoostedModel
+```
+
+## Results
+```{r}
+AccuracyResults <- data.frame(
+  Model = c('Decision Tree', 'Random Forest', 'Generalized Boosted Model'),
+  Accuracy = rbind(cm_decisionTreeModel$overall['Accuracy'], cm_randomForestModel$overall['Accuracy'], cm_generalizedBoostedModel$overall['Accuracy']),
+  'Out-Of-Sample Error' = rbind(1- cm_decisionTreeModel$overall['Accuracy'], 1- cm_randomForestModel$overall['Accuracy'],1- cm_generalizedBoostedModel$overall['Accuracy'])
+)
+print(AccuracyResults)
+```
+The table shows that the Random Forest Model is the best model having the accuracy of `r cm_randomForestModel$overall['Accuracy']` and out-of-sample rate of `r 1 - cm_randomForestModel$overall['Accuracy']`.
+
+```{r}
+plot(randomForestModel)
+plot(generalizedBoostedModel)
+```
+
+# Apply Best Model
+Having the highest accuracy, random forest model is applied to the validation datasets.
+
+```{r}
+output <- predict(randomForestModel, newdata=validateDs)
+output
+```
